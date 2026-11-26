@@ -1,0 +1,47 @@
+company_prefix = '[ARCHIVÉ] '
+user_partner_prefix = '[Utilisateur archivé] '
+
+for record in records:
+    role_matrixes = env['cds.company.role.matrix'].sudo().search([
+        ('cds_company_id', '=', record.id)
+    ])
+    matrix_users = role_matrixes.mapped('cds_partner_id.user_ids')
+    matrix_partner = role_matrixes.mapped('cds_partner_id')
+    
+    # 2. search for users have default company_id = record
+    default_users = env['res.users'].sudo().search([
+        ('company_id', '=', record.id)
+    ])
+    
+    # 3. Search for users active from matrix 
+    users_to_archive = (matrix_users | default_users).filtered(
+        lambda u: u.active and u.id != env.user.id
+    )
+    
+    # 4. Search for partner active from matrix 
+    partners_to_archive = matrix_partner.filtered(
+        lambda p: p.active and p.id != env.user.partner_id.id
+    )
+    
+    # 5. UPDATE NAME OF PARTNERS AND USERS WHO WILL BE ARCHIVED
+    for partner in partners_to_archive:
+        if partner.name and not partner.name.startswith(user_partner_prefix):
+            partner.sudo().write({'name': user_partner_prefix + partner.name})
+            
+    for user in users_to_archive:
+        if user.name and not user.name.startswith(user_partner_prefix):
+            user.sudo().write({'name': user_partner_prefix + user.name})
+            
+    # 6. ARCHIVE MATRIX USERS 
+    if users_to_archive:
+        users_to_archive.sudo().action_archive()
+        
+    # 7. ARCHIVE MATRIX PARTNERS
+    if partners_to_archive:
+        partners_to_archive.sudo().action_archive()
+        
+    # 8. update name of archived company and action to archive company
+    if record.name and not record.name.startswith(company_prefix):
+        record.sudo().write({'name': company_prefix + record.name})
+        
+    record.sudo().action_archive()
