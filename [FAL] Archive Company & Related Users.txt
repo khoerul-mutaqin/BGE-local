@@ -38,10 +38,23 @@ for record in records:
         
     # 7. ARCHIVE MATRIX PARTNERS
     if partners_to_archive:
-        partners_to_archive.sudo().action_archive()
+        env.cr.execute("""
+            UPDATE res_partner
+            SET active = %s
+            WHERE id IN %s
+        """, (False, tuple(partners_to_archive.ids)))        
+        # partners_to_archive.sudo().action_archive()
         
     # 8. update name of archived company and action to archive company
     if record.name and not record.name.startswith(company_prefix):
         record.sudo().write({'name': company_prefix + record.name})
         
+    # 9. Disconnect French E-invoicing
+    record.sudo().write({
+        'account_peppol_contact_email': False,
+        'peppol_purchase_journal_id': False,
+    })
+
+
+    
     record.sudo().action_archive()
